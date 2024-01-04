@@ -16,7 +16,7 @@ RUN pip install -r requirements.txt
 EXPOSE $PORT
 
 #For Heroku
-CMD gunicorn --workers=4 --bind 0.0.0.0:$PORT application:application
+CMD streamlit run application.py
 
 # CMD python application.py
 # CMD ["flask","run"]
