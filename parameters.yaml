@@ -1,0 +1,31 @@
+data:
+  resource_data: data/resource_monitor_data.csv
+
+info:
+  project: Simulation_Model
+  random_state: 50
+logging:
+  format: '%(levelname)s: %(asctime)s: %(message)s'
+  level: INFO
+  log_file: logs/data.log
+  
+streamlit_configuration:
+
+
+simulation_parameters:
+  chance_need_NICU: 0.0233  # percentage chance NICU needed - 70 out of 3000 in 21-22 at Warrington
+  chance_need_HDCU: 0.0166  # percentage chance HDCU needed - 44 out of 3000 in 21-22 at Warrington
+  chance_need_SCBU: 0.0343  # percentage chance SCBU needed - 103 out of 3000 in 21-22 at Warrington
+  # percentage chance to discharge is remainder
+
+  chance_need_HDCU_after_NICU: 0.028  # percentage chance HDCU needed after discharge from NICU
+  chance_need_SCBU_after_NICU: 0.087  # percentage chance SCBU needed after discharge from NICU
+  # percentage chance to discharge is remainder
+
+  chance_need_NICU_after_HDCU: 0.024  # percentage chance NICU needed after discharge from HDCU
+  chance_need_SCBU_after_HDCU: 0.125  # percentage chance SCBU needed after discharge from HDCU
+  # percentage chance to discharge is remainder
+
+  chance_need_NICU_after_SCBU: 0.003  # percentage chance NICU needed after discharge from SCBU
+  chance_need_HDCU_after_SCBU: 0.017  # percentage chance SCBU needed after discharge from SCBU
+  # percentage chance to discharge is remainder
