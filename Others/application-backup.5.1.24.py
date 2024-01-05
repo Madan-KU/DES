@@ -1,11 +1,9 @@
 import os
-import io
 import csv
 import json
 import time
 import yaml
 import simpy
-import pandas as pd
 import random
 import logging
 import warnings
@@ -14,7 +12,6 @@ import seaborn as sns
 import cProfile
 import pstats
 import io
-import re
 
 import pandas as pd
 import streamlit as st
@@ -54,9 +51,7 @@ if 'running' not in st.session_state:
 if 'paused' not in st.session_state:
     st.session_state['paused'] = False
 
-# ==================================================
-# ===================== Plots ======================
-# ==================================================
+
 
 def plot_resource_utilization(data):
     plt.figure(figsize=(10, 6), dpi=300)
@@ -80,6 +75,7 @@ def plot_queue_length(data):
     plt.figure(figsize=(10, 6), dpi=300)
     sns.set(style="whitegrid")
 
+    # Plot for each resource
     sns.lineplot(x='Day', y='Queue_Length', hue='Resource', data=data, legend='full')
 
     # Calculate and plot the mean line grouped by Day
@@ -159,70 +155,61 @@ def plot_daywise_resource_utilization(data):
     plt.tight_layout()
 
     st.pyplot(plt)
-
 st.set_page_config(page_title="Simulation Demo", page_icon="📈")
 
-# ==================================================
-# ============== Submit feedback page ==============
-# ==================================================
 
-def submit_feedback_page():
-    # Helper function for email validation
-    def validate_email(email):
-        email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-        return re.fullmatch(email_regex, email)
+####################
+# def calculate_bed_occupancy_rate(data, unit_type):
+#     total_capacity = sim_params_instance['number_of_' + unit_type + '_cots']
+#     avg_daily_use = data[data['Resource'] == unit_type]['Daily_Use'].mean()
+#     return (avg_daily_use / total_capacity) * 100
 
-    # Helper function to save feedback to a JSON file
-    def save_feedback(feedback_file, feedback_data):
-        try:
-            # Attempt to read existing data
-            try:
-                with open(feedback_file, 'r') as file:
-                    data = json.load(file)
-            except FileNotFoundError:
-                data = []
+# def calculate_average_length_of_stay(data, unit_type):
+#     total_stays = data[data['Resource'] == unit_type]['Daily_Use'].sum()
+#     total_admissions = data[data['Resource'] == unit_type]['Admissions'].sum()
+#     return total_stays / total_admissions if total_admissions != 0 else 0
 
-            # Append new feedback and save
+# def calculate_readmission_rate(data, unit_type):
+#     readmissions = data[(data['Resource'] == unit_type) & (data['Readmission'] == True)].shape[0]
+#     total_discharges = data[data['Resource'] == unit_type]['Discharges'].sum()
+#     return (readmissions / total_discharges) * 100 if total_discharges != 0 else 0
+
+# Function to save feedback in a JSON file
+def save_feedback(feedback_data):
+    feedback_file = 'feedback.json'
+    try:
+        with open(feedback_file, 'r+') as file:
+            data = json.load(file)
             data.append(feedback_data)
-            with open(feedback_file, 'w') as file:
-                json.dump(data, file, indent=4)
+            file.seek(0)
+            json.dump(data, file, indent=4)
+    except FileNotFoundError:
+        with open(feedback_file, 'w') as file:
+            json.dump([feedback_data], file, indent=4)
 
-        except Exception as e:
-            raise Exception(f"Error saving feedback: {e}")
-
-    # Streamlit UI elements for feedback form
-    st.header("Submit your Feedback")
-    feedback_type = st.selectbox("Type of Feedback", ["Issue", "Suggestion", "General Comment"], key='feedback_type')
-    comment = st.text_area("Your Feedback", help="Please share your thoughts or issues.", key='feedback_comment')
-    email = st.text_input("Email (Optional)", help="Enter your email if you wish to be contacted.", key='feedback_email')
-    submit_feedback = st.button("Submit Feedback", key='submit_feedback')
+# Feedback form in the sidebar or a separate page
+def feedback_form(key_prefix):
+    st.sidebar.header("Submit your Feedback")
+    feedback_type = st.sidebar.selectbox("Type of Feedback", ["Issue", "Suggestion", "General Comment"], key=f'{key_prefix}_feedback_type')
+    comment = st.sidebar.text_area("Your Feedback", help="Please share your thoughts or issues.", key=f'{key_prefix}_feedback_comment')
+    email = st.sidebar.text_input("Email (Optional)", help="Enter your email if you wish to be contacted.", key=f'{key_prefix}_feedback_email')
+    submit_feedback = st.sidebar.button("Submit Feedback", key=f'{key_prefix}_submit_feedback')
 
     if submit_feedback:
-        # Validate email if provided
-        if email and not validate_email(email):
-            st.error("Please enter a valid email address.")
-            return
-
         feedback_data = {
             "type": feedback_type,
             "comment": comment,
             "email": email
         }
+        save_feedback(feedback_data)
+        st.sidebar.success("Thank you for your feedback!")
 
-        # Attempt to save feedback
-        try:
-            save_feedback('feedback.json', feedback_data)
-            st.success("Thank you for your feedback!")
-        except Exception as e:
-            st.error(str(e))
 
-# ==================================================
-# ================ Markdown Content ================
-# ==================================================
-            
+####################
 markdown_content = """
 # Welcome to the Neonatal Critical Care Bed Use Modelling Application
 
+# /// GPT Generated Dummy Text 
 ## Overview
 Delve into the intricate workings of a neonatal critical care unit with our advanced simulation tool. This application is meticulously crafted to model the utilization of critical care beds in neonatal units, using real-world data and probabilities. It's an essential tool for healthcare administrators, planners, and researchers aiming to optimize neonatal care efficiency and effectiveness.
 
@@ -287,55 +274,45 @@ class simulation_parameters:
 
 sim_params_instance = simulation_parameters(config) 
 
-# ==================================================
-# =============== Modify Parameters ================
-# ==================================================
 
-def modify_parameters_page():
-    def authenticate_user(username, password):
-        # Placeholder for authentication logic
-        # In production, use secure password handling
-        return username == "Admin" and password == "admin"
-
-    def handle_yaml(file_path, data=None, operation='load'):
-        try:
-            if operation == 'load':
-                with open(file_path, 'r') as file:
-                    return yaml.safe_load(file)
-            elif operation == 'save' and data is not None:
-                with open(file_path, 'w') as file:
-                    yaml.dump(data, file, default_flow_style=False)
-                    return True
-        except Exception as e:
-            st.error(f"Error handling YAML file: {e}")
-            return None
-
-    st.markdown("### Admin Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type='password')
-
-    if st.button('Verify'):
-        if authenticate_user(username, password):
-            st.markdown("### Parameters/Configuration")
-            yaml_file_path = 'parameters.yaml'
-
-            if os.path.exists(yaml_file_path):
-                data = handle_yaml(yaml_file_path)
-                if data is not None:
-                    updated_data = {key: st.text_input(f"{key}", value) for key, value in data.items()}
-
-                    if st.button('Save Changes'):
-                        if handle_yaml(yaml_file_path, updated_data, 'save'):
-                            st.success("Configuration updated successfully!")
-            else:
-                st.error("YAML file not found.")
-        else:
-            st.error("Invalid username or password.")
 
 def main_app():
+    # st.sidebar.title("Navigation")
+    # page = st.sidebar.radio("Select a Page", ["Main App", "Modify Parameters", "Submit Your Feedback"])
+
+    # if page == "Main App":
+    #     main_app()
+    # elif page == "Modify Parameters":
+    #     modify_parameters_page()
+    # elif page == "Submit Your Feedback":
+    #     submit_feedback_page()
+
 
     with st.sidebar:
-        st.header("Simulation Settings", divider='rainbow')      
+
+        st.image('./NECS_Cropped_Dots.png', caption=None, width=100, use_column_width=None, clamp=False, channels="RGB", output_format="auto")
+        st.title("")
+        st.header("Neonatal Critical Care Bed Use Modelling", divider='rainbow')
+
+  
+        
+        # Add an 'Admin' button in the sidebar
+        if st.sidebar.button("Modify Parameters"):
+            st.sidebar.markdown("### Parameters/Configuration")
+            yaml_file_path = 'parameters.yaml'
+
+            # Load and display the current YAML data
+            if os.path.exists(yaml_file_path):
+                data = load_yaml(yaml_file_path)
+                updated_data = {}
+                for key, value in data.items():
+                    updated_data[key] = st.sidebar.text_input(f"{key}", value)
+
+                if st.sidebar.button('Save Changes'):
+                    save_yaml(yaml_file_path, updated_data)
+                    st.sidebar.success("Configuration updated successfully!")
+            else:
+                st.sidebar.error("YAML file not found.")
 
         tab1, tab2 = st.tabs(["Simulation Run Settings", "Unit Parameters"])
         with tab1:
@@ -370,8 +347,13 @@ def main_app():
         
         # if st.sidebar.button("Submit Feedback"):
     
-        # feedback_form('sidebar')
-        # feedback_form('main')    
+        feedback_form('sidebar')
+        # feedback_form('main')
+    
+    # For the number of runs specified in the g class, create an instance of the
+    # NCCU_Model class, and call its run method
+
+    
 
     with st.form(key='my_form'):
     
@@ -400,6 +382,7 @@ def main_app():
 
             all_runs_data = pd.DataFrame()  # Initialize all_runs_data
             for run in range(total_runs):
+                # logger.info("#######>main run loop in app.py") ########### Main Loop Runs Properly**
 
                 # Update the progress bar
                 progress_percentage = int((run / total_runs) * 100)
@@ -432,6 +415,20 @@ def main_app():
             data = all_runs_data
             data['Utilization_Rate'] = data['Daily_Use'] / data['Total_Capacity']
 
+            # data_avg = data.groupby(['Day', 'Resource'])['Daily_Use'].mean().reset_index()
+
+            # resources = data_avg['Resource'].unique()
+
+            # fig, ax = plt.subplots()
+
+            # for resource in resources:
+            #     resource_data = data_avg[data_avg['Resource'] == resource]
+            #     ax.plot(resource_data['Day'], resource_data['Daily_Use'], label=resource)
+
+            # ax.set_xlabel('Day')
+            # ax.set_ylabel('Average Daily Use')
+            # ax.set_title('Average Daily Use of Resources Over Time')
+
             st.header("Simulation Results Visualization")
 
             st.subheader("Resource Utilization Over Time")
@@ -451,22 +448,8 @@ def main_app():
 
             if st.checkbox('Show simulation Statistics'):
                 st.subheader("Summary Statistics of Data")
-                data_desc = data.describe()
                 st.dataframe(data.describe())
 
-            @st.cache_data
-            def convert_df(df):
-                # IMPORTANT: Cache the conversion to prevent computation on every rerun
-                return df.to_csv().encode('utf-8')
-
-            csv = convert_df(data)
-
-            st.download_button(
-                label="Download data as CSV",
-                data=csv,
-                file_name='Simulation_data.csv',
-                mime='text/csv',
-            )
             print(data.describe())
 
             # ax.legend()
@@ -479,6 +462,8 @@ def main_app():
     if stop_button:
         st.session_state['running'] = False
 
+    # except Exception as global_exception:
+    #     logger.error(f"Global exception: {global_exception}")
 
 def display_agreement():
     st.title("Neonatal Critical Care Simulation")
@@ -495,37 +480,10 @@ def display_agreement():
         st.warning("You have disagreed with the terms. Exiting the application.")
         st.stop()
 
-# ==================================================
-# =================== Main Block ===================
-# ==================================================
-
-def main():
-    st.sidebar.image('./NECS_Cropped_Dots.png', caption=None, width=200, use_column_width=None, clamp=False, channels="RGB", output_format="auto")
-    # st.sidebar.divider()
-    st.sidebar.header("Navigation", divider='rainbow')
-    page = st.sidebar.radio("Select a Page", ["Main App", "Modify Parameters", "Submit Your Feedback"])
-    # st.sidebar.divider()
-
-    if page == "Main App":
-        main_app()
-    elif page == "Modify Parameters":
-        modify_parameters_page()
-    elif page == "Submit Your Feedback":
-        submit_feedback_page()
-
-
 if 'agreed' not in st.session_state:
     st.session_state['agreed'] = False
 
 if st.session_state['agreed']:
-    main()
+    main_app()
 else:
     display_agreement()
-
-
-#### Add View run logs via Admin Panel
-# border = "=" * 50
-# text = " Plots ".center(50, '=')
-# print(border)
-# print(text)
-# print(border)

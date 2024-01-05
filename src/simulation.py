@@ -17,7 +17,7 @@ def Simulate(sim_params): #Working**
     
     for attr_name in dir(sim_params):
         if not callable(getattr(sim_params, attr_name)) and not attr_name.startswith("__"):
-            print(f"{attr_name}: {getattr(sim_params, attr_name)}") 
+            # print(f"{attr_name}: {getattr(sim_params, attr_name)}") 
             globals()[attr_name] = getattr(sim_params, attr_name)
 
 
