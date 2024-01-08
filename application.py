@@ -224,12 +224,9 @@ markdown_content = """
 # Welcome to the Neonatal Critical Care Bed Use Modelling Application
 
 ## Overview
-Delve into the intricate workings of a neonatal critical care unit with our advanced simulation tool. This application is meticulously crafted to model the utilization of critical care beds in neonatal units, using real-world data and probabilities. It's an essential tool for healthcare administrators, planners, and researchers aiming to optimize neonatal care efficiency and effectiveness.
-
+[Placeholder]
 ## Key Features
-1. **Realistic Simulation**: Experience the dynamics of neonatal care with our stochastic discrete event simulation, reflecting actual patient flow and bed utilization.
-2. **Customizable Parameters**: Tailor your simulation with parameters like the chances of requiring different types of neonatal care (NICU, HDCU, SCBU) and the probabilities of needing subsequent care levels post-discharge.
-3. **Data-Driven Insights**: Analyze detailed metrics through integrated visualizations, understanding resource utilization and identifying potential improvements in care delivery.
+[Placeholder]
 
 ## Getting Started
 To begin exploring the potential of your neonatal care unit:
