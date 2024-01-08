@@ -111,7 +111,7 @@ def plot_available_capacity(data):
     plt.xlabel('Day')
     plt.ylabel('Available Capacity')
     plt.title('Available Capacity for Neonatal Care Units Over Time (with Mean)')
-    plt.legend()
+    plt.legend( loc='upper left') #title='Neonatal Unit',
     plt.grid(True)
     st.pyplot(plt)
     
@@ -230,7 +230,6 @@ Delve into the intricate workings of a neonatal critical care unit with our adva
 1. **Realistic Simulation**: Experience the dynamics of neonatal care with our stochastic discrete event simulation, reflecting actual patient flow and bed utilization.
 2. **Customizable Parameters**: Tailor your simulation with parameters like the chances of requiring different types of neonatal care (NICU, HDCU, SCBU) and the probabilities of needing subsequent care levels post-discharge.
 3. **Data-Driven Insights**: Analyze detailed metrics through integrated visualizations, understanding resource utilization and identifying potential improvements in care delivery.
-4. **User-Friendly Experience**: Enjoy a streamlined interface designed for easy navigation and interaction, making complex simulations accessible to all user levels.
 
 ## Getting Started
 To begin exploring the potential of your neonatal care unit:
@@ -449,10 +448,25 @@ def main_app():
             st.subheader("Day-wise Resource Utilization")
             plot_daywise_resource_utilization(data)
 
-            if st.checkbox('Show simulation Statistics'):
-                st.subheader("Summary Statistics of Data")
-                data_desc = data.describe()
-                st.dataframe(data.describe())
+            # if st.checkbox('Show simulation Statistics'):
+            st.subheader("Summary Statistics of Data")
+            data_desc = data.describe()
+            st.dataframe(data_desc)
+
+            ###KPIs
+            average_utilization = data['Utilization_Rate'].mean()
+            max_queue_length = data['Queue_Length'].max()
+            # Display KPIs using Markdown
+            
+            metric1,metric2,=st.columns(2,gap='small')
+            with metric1:
+                st.info('Average Utilization') #,icon="💰"
+                st.metric(label="Average Utilization",value=f"{average_utilization:,.0f}")
+
+            with metric2:
+                st.info('Max Queue Length')
+                st.metric(label="Max Queue Length",value=f"{max_queue_length:,.0f}")
+
 
             @st.cache_data
             def convert_df(df):
@@ -467,8 +481,6 @@ def main_app():
                 file_name='Simulation_data.csv',
                 mime='text/csv',
             )
-            print(data.describe())
-
             # ax.legend()
 
             # st.pyplot(fig)
