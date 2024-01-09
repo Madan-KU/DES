@@ -5,6 +5,7 @@ import json
 import time
 import yaml
 import simpy
+import numpy as np
 import pandas as pd
 import random
 import logging
@@ -54,6 +55,26 @@ if 'running' not in st.session_state:
 if 'paused' not in st.session_state:
     st.session_state['paused'] = False
 
+USER_CREDENTIALS = {
+    "necs": "necs",
+}
+
+def check_login(username, password):
+    return username in USER_CREDENTIALS and USER_CREDENTIALS[username] == password
+
+def show_login_page():
+    st.title("Access Authentication")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if check_login(username, password):
+            st.session_state['logged_in'] = True
+            st.experimental_rerun()
+        else:
+            st.error("Invalid username or password.")
+
+   
 # ==================================================
 # ===================== Plots ======================
 # ==================================================
@@ -62,23 +83,56 @@ def plot_resource_utilization(data):
     plt.figure(figsize=(10, 6), dpi=300)
     sns.set(style="whitegrid")
 
-    # Plot for each resource
+    mean_NICU = data[data['Resource'] == 'NICU']['Daily_Use'].mean()
+    mean_HDCU = data[data['Resource'] == 'HDCU']['Daily_Use'].mean()
+    mean_SCBU = data[data['Resource'] == 'SCBU']['Daily_Use'].mean()
+
+    # Display the metrics
+    with st.container(border=True):
+        st.info(" Average Utilization by Resource")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="Average NICU", value=f"{mean_NICU:.2f}")
+        with col2:
+            st.metric(label="Average HDCU", value=f"{mean_HDCU:.2f}")
+        with col3:
+            st.metric(label="Average SCBU", value=f"{mean_SCBU:.2f}")
+
+        col1, col2, col3 = st.columns(3)
+
+
     sns.lineplot(x='Day', y='Daily_Use', hue='Resource', data=data, legend='full')
 
-    # Calculate and plot the mean line grouped by Day
     mean_data = data.groupby('Day')['Daily_Use'].mean().reset_index()
     sns.lineplot(x='Day', y='Daily_Use', data=mean_data, color='black', label='Mean Daily Use', linewidth=2)
 
     plt.xlabel('Day')
     plt.ylabel('Average Daily Use')
     plt.title('Resource Utilization Over Time')
-    plt.legend()
+    plt.legend( loc='upper right')
     st.pyplot(plt)
 
 
 def plot_queue_length(data):
     plt.figure(figsize=(10, 6), dpi=300)
     sns.set(style="whitegrid")
+
+    queue_len_NICU = data[data['Resource'] == 'NICU']['Queue_Length'].mean()
+    queue_len_HDCU = data[data['Resource'] == 'HDCU']['Queue_Length'].mean()
+    queue_len_SCBU = data[data['Resource'] == 'SCBU']['Queue_Length'].mean()
+
+    # Display the metrics
+    with st.container(border=True):
+        st.info("Average Queue Lenght by Resource")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="Average NICU", value=f"{queue_len_NICU:.2f}")
+        with col2:
+            st.metric(label="Average HDCU", value=f"{queue_len_HDCU:.2f}")
+        with col3:
+            st.metric(label="Average SCBU", value=f"{queue_len_SCBU:.2f}")
+
+        col1, col2, col3 = st.columns(3)
 
     sns.lineplot(x='Day', y='Queue_Length', hue='Resource', data=data, legend='full')
 
@@ -89,13 +143,30 @@ def plot_queue_length(data):
     plt.xlabel('Day')
     plt.ylabel('Queue Length')
     plt.title('Queue Length Over Time')
-    plt.legend()
+    plt.legend( loc='upper right')
     st.pyplot(plt)
         
 def plot_available_capacity(data):
 
     available_capacity_data = data[['Day', 'Resource', 'Available_Capacity']]
     plt.figure(figsize=(10, 6))
+
+    Available_Capacity_NICU = data[data['Resource'] == 'NICU']['Available_Capacity'].mean()
+    Available_Capacity_HDCU = data[data['Resource'] == 'HDCU']['Available_Capacity'].mean()
+    Available_Capacity_SCBU = data[data['Resource'] == 'SCBU']['Available_Capacity'].mean()
+
+    # Display the metrics
+    with st.container(border=True):
+        st.info("Average Available Capacity by Resource")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="Average NICU", value=f"{Available_Capacity_NICU:.2f}")
+        with col2:
+            st.metric(label="Average HDCU", value=f"{Available_Capacity_HDCU:.2f}")
+        with col3:
+            st.metric(label="Average SCBU", value=f"{Available_Capacity_SCBU:.2f}")
+
+        col1, col2, col3 = st.columns(3)
 
     # Plot each unit with alpha=0.2
     for unit in available_capacity_data['Resource'].unique():
@@ -111,43 +182,107 @@ def plot_available_capacity(data):
     plt.xlabel('Day')
     plt.ylabel('Available Capacity')
     plt.title('Available Capacity for Neonatal Care Units Over Time (with Mean)')
-    plt.legend( loc='upper left') #title='Neonatal Unit',
+    plt.legend( loc='upper right') #title='Neonatal Unit',
     plt.grid(True)
     st.pyplot(plt)
     
-def plot_admission_discharge_trends(data):
-    grouped_data = data.groupby(['Day', 'Resource'])['Daily_Use'].sum().unstack()
-    admissions = grouped_data.diff().clip(lower=0)  # Increase in use as admissions
-    discharges = -grouped_data.diff().clip(upper=0)  # Decrease in use as discharges
+def plot_admission_discharge_trends_moving_avg(data):
 
-    plt.figure(figsize=(12, 6))
+    daily_use = data.groupby(['Day', 'Resource'])['Daily_Use'].sum().unstack()
+    admissions = daily_use.diff().clip(lower=0)
+    discharges = -daily_use.diff().clip(upper=0)
 
-    # Stacking admissions
-    plt.stackplot(grouped_data.index, 
-                  [admissions[unit] for unit in admissions.columns], 
-                  labels=[f'{unit} Admissions' for unit in admissions.columns],
-                  alpha=0.6)
+    admissions_avg = admissions.rolling(window=7).mean().melt(ignore_index=False, var_name='Resource', value_name='Admissions').reset_index()
+    discharges_avg = discharges.rolling(window=7).mean().melt(ignore_index=False, var_name='Resource', value_name='Discharges').reset_index()
 
-    # Stacking discharges
-    plt.stackplot(grouped_data.index, 
-                  [discharges[unit] for unit in discharges.columns], 
-                  labels=[f'{unit} Discharges' for unit in discharges.columns],
-                  alpha=0.6)
+    # admissions_avg['Category'] = admissions_avg['Resource'] + ' Admissions'
+    # discharges_avg['Category'] = discharges_avg['Resource'] + ' Discharges'
 
-    plt.title('Inferred Admissions and Discharges Over Time (Stacked Area Plot)')
+    Avg_Admission_NICU = admissions_avg[admissions_avg['Resource'] == 'NICU']['Admissions'].mean()
+    Avg_Admission_HDCU = admissions_avg[admissions_avg['Resource'] == 'HDCU']['Admissions'].mean()
+    Avg_Admission_SCBU = admissions_avg[admissions_avg['Resource'] == 'SCBU']['Admissions'].mean()
+
+    Avg_Discharge_NICU = discharges_avg[discharges_avg['Resource'] == 'NICU']['Discharges'].mean()
+    Avg_Discharge_HDCU = discharges_avg[discharges_avg['Resource'] == 'HDCU']['Discharges'].mean()
+    Avg_Discharge_SCBU = discharges_avg[discharges_avg['Resource'] == 'SCBU']['Discharges'].mean()
+   
+
+    with st.container(border=True):
+        st.info("Average Admissions and Discharges by Resource")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="NICU Admissions", value=f"{Avg_Admission_NICU:.2f}")
+        with col2:
+            st.metric(label="HDCU Admissions", value=f"{Avg_Admission_HDCU:.2f}")
+        with col3:
+            st.metric(label="SCBU Admissions", value=f"{Avg_Admission_SCBU:.2f}")
+
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            st.metric(label="NICU Discharges", value=f"{Avg_Discharge_NICU:.2f}")
+        with col5:
+            st.metric(label="HDCU Discharges", value=f"{Avg_Discharge_HDCU:.2f}")
+        with col6:
+            st.metric(label="SCBU Discharges", value=f"{Avg_Discharge_SCBU:.2f}")
+
+
+    # sns.lineplot(data=admissions_avg, x='Day', y='Admissions')
+    # sns.lineplot(data=discharges_avg, x='Day', y='Discharges')
+
+
+    # plt.xlabel('Day')
+    # plt.ylabel('7-Day Moving Average')
+    # plt.title('7-Day Moving Average of Admissions and Discharges by Resource')
+    # plt.legend(title='Category', loc='upper right', bbox_to_anchor=(1.05, 1))
+
+    # st.pyplot(plt)
+
+    plt.figure(figsize=(10, 6), dpi=300)
+    sns.set(style="whitegrid")
+
+    # Plot for admissions
+    sns.lineplot(data=admissions_avg, x='Day', y='Admissions', hue='Resource', legend=False)
+    # Plotting mean lines for each resource in admissions
+    # for resource in admissions_avg['Resource'].unique():
+    #     mean_admissions = admissions_avg[admissions_avg['Resource'] == resource]['Admissions'].mean()
+    #     plt.axhline(mean_admissions, linestyle='--', label=f"{resource} Avg Admissions")
+
+    # Plot for discharges
+    sns.lineplot(data=discharges_avg, x='Day', y='Discharges', hue='Resource', legend=False)
+    # Plotting mean lines for each resource in discharges
+    # for resource in discharges_avg['Resource'].unique():
+    #     mean_discharges = discharges_avg[discharges_avg['Resource'] == resource]['Discharges'].mean()
+    #     plt.axhline(mean_discharges, linestyle='--', label=f"{resource} Avg Discharges")
+
     plt.xlabel('Day')
-    plt.ylabel('Count')
-    plt.legend(loc='upper left')
-    plt.grid(True)
+    plt.ylabel('7-Day Moving Average')
+    plt.title('7-Day Moving Average of Admissions and Discharges by Resource')
+    plt.legend(title='Category', loc='upper right')
+
     st.pyplot(plt)
 
 def plot_daywise_resource_utilization(data):
     data['Utilization_Rate'] = data['Daily_Use'] / data['Total_Capacity']
+
+    avg_utilization_NICU = data[data['Resource'] == 'NICU']['Utilization_Rate'].mean()
+    avg_utilization_HDCU = data[data['Resource'] == 'HDCU']['Utilization_Rate'].mean()
+    avg_utilization_SCBU = data[data['Resource'] == 'SCBU']['Utilization_Rate'].mean()
     
     plt.figure(figsize=(12, 6))
-    sns.set(style="whitegrid")  # Cleaner style
+    sns.set(style="whitegrid") 
 
-    # Apply a 7-day moving average to smooth the data
+    with st.container(border=True):
+            st.info("Average Utilization Rate by Resource")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(label="NICU", value=f"{avg_utilization_NICU:.2f}")
+            with col2:
+                st.metric(label="HDCU", value=f"{avg_utilization_HDCU:.2f}")
+            with col3:
+                st.metric(label="SCBU", value=f"{avg_utilization_SCBU:.2f}")
+
     data['Utilization_MA'] = data.groupby('Resource')['Utilization_Rate'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
 
     sns.lineplot(x='Day', y='Utilization_MA', hue='Resource', data=data, marker="o")
@@ -190,12 +325,12 @@ def submit_feedback_page():
         except Exception as e:
             raise Exception(f"Error saving feedback: {e}")
 
-    # Streamlit UI elements for feedback form
-    st.header("Submit your Feedback")
-    feedback_type = st.selectbox("Type of Feedback", ["Issue", "Suggestion", "General Comment"], key='feedback_type')
-    comment = st.text_area("Your Feedback", help="Please share your thoughts or issues.", key='feedback_comment')
-    email = st.text_input("Email (Optional)", help="Enter your email if you wish to be contacted.", key='feedback_email')
-    submit_feedback = st.button("Submit Feedback", key='submit_feedback')
+    with st.container(border=True):
+        st.header("Submit your Feedback")
+        feedback_type = st.selectbox("Type of Feedback", ["Issue", "Suggestion", "General Comment"], key='feedback_type')
+        comment = st.text_area("Your Feedback", help="Please share your thoughts or issues.", key='feedback_comment')
+        email = st.text_input("Email (Optional)", help="Enter your email if you wish to be contacted.", key='feedback_email')
+        submit_feedback = st.button("Submit Feedback", key='submit_feedback')
 
     if submit_feedback:
         # Validate email if provided
@@ -306,9 +441,10 @@ def modify_parameters_page():
             st.error(f"Error handling YAML file: {e}")
             return None
 
-    st.markdown("### Admin Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type='password')
+    with st.container(border=True):
+        st.info("### Admin Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type='password')
 
     if st.button('Verify'):
         if authenticate_user(username, password):
@@ -440,29 +576,31 @@ def main_app():
             plot_available_capacity(all_runs_data)
 
             st.subheader("Inferred Admission and Discharge Trends")
-            plot_admission_discharge_trends(data)
+            plot_admission_discharge_trends_moving_avg(data)
 
             st.subheader("Day-wise Resource Utilization")
             plot_daywise_resource_utilization(data)
 
-            # if st.checkbox('Show simulation Statistics'):
-            st.subheader("Summary Statistics of Data")
-            data_desc = data.describe()
-            st.dataframe(data_desc)
+            with st.container(border=True):
+                st.info("*//Experimental//*")
+                # if st.checkbox('Show simulation Statistics'):
+                st.subheader("Summary Statistics of Data")
+                data_desc = data.describe()
+                st.dataframe(data_desc)
 
-            ###KPIs
-            average_utilization = data['Utilization_Rate'].mean()
-            max_queue_length = data['Queue_Length'].max()
-            # Display KPIs using Markdown
-            
-            metric1,metric2,=st.columns(2,gap='small')
-            with metric1:
-                st.info('Average Utilization') #,icon="💰"
-                st.metric(label="Average Utilization",value=f"{average_utilization:,.0f}")
+                ###KPIs
+                average_utilization = data['Utilization_Rate'].mean()
+                max_queue_length = data['Queue_Length'].max()
+                # Display KPIs using Markdown
 
-            with metric2:
-                st.info('Max Queue Length')
-                st.metric(label="Max Queue Length",value=f"{max_queue_length:,.0f}")
+                metric1,metric2,=st.columns(2,gap='small')
+                with metric1:
+                    st.info('Average Utilization') #,icon="💰"
+                    st.metric(label="Average Utilization",value=f"{average_utilization:,.4f}")
+
+                with metric2:
+                    st.info('Max Queue Length')
+                    st.metric(label="Max Queue Length",value=f"{max_queue_length:,.0f}")
 
 
             @st.cache_data
@@ -507,30 +645,34 @@ def display_agreement():
 # ==================================================
 # =================== Main Block ===================
 # ==================================================
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
 
-def main():
-    st.sidebar.image('./NECS_Cropped_Dots.png', caption=None, width=200, use_column_width=None, clamp=False, channels="RGB", output_format="auto")
-    # st.sidebar.divider()
-    st.sidebar.header("Navigation", divider='rainbow')
-    page = st.sidebar.radio("Select a Page", ["Main App", "Modify Parameters", "Submit Your Feedback"])
-    # st.sidebar.divider()
+if st.session_state['logged_in']:
+    def main():
+        st.sidebar.image('./NECS_Cropped_Dots.png', caption=None, width=200, use_column_width=None, clamp=False, channels="RGB", output_format="auto")
+        # st.sidebar.divider()
+        st.sidebar.header("Navigation", divider='rainbow')
+        page = st.sidebar.radio("Select a Page", ["Main App", "Modify Parameters", "Submit Your Feedback"])
+        # st.sidebar.divider()
 
-    if page == "Main App":
-        main_app()
-    elif page == "Modify Parameters":
-        modify_parameters_page()
-    elif page == "Submit Your Feedback":
-        submit_feedback_page()
+        if page == "Main App":
+            main_app()
+        elif page == "Modify Parameters":
+            modify_parameters_page()
+        elif page == "Submit Your Feedback":
+            submit_feedback_page()
 
 
-if 'agreed' not in st.session_state:
-    st.session_state['agreed'] = False
+    if 'agreed' not in st.session_state:
+        st.session_state['agreed'] = False
 
-if st.session_state['agreed']:
-    main()
+    if st.session_state['agreed']:
+        main()
+    else:
+        display_agreement()
 else:
-    display_agreement()
-
+    show_login_page()
 
 #### Add View run logs via Admin Panel
 # border = "=" * 50
