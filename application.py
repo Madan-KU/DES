@@ -18,6 +18,8 @@ import io
 import re
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 #from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -55,6 +57,9 @@ if 'running' not in st.session_state:
 if 'paused' not in st.session_state:
     st.session_state['paused'] = False
 
+if 'plot_initialized' not in st.session_state:
+    st.session_state.plot_initialized = False
+
 USER_CREDENTIALS = {
     "necs": "necs",
 }
@@ -78,10 +83,8 @@ def show_login_page():
 # ==================================================
 # ===================== Plots ======================
 # ==================================================
-
+           
 def plot_resource_utilization(data):
-    plt.figure(figsize=(10, 6), dpi=300)
-    sns.set(style="whitegrid")
 
     mean_NICU = data[data['Resource'] == 'NICU']['Daily_Use'].mean()
     mean_HDCU = data[data['Resource'] == 'HDCU']['Daily_Use'].mean()
@@ -100,30 +103,30 @@ def plot_resource_utilization(data):
 
         col1, col2, col3 = st.columns(3)
 
+    fig = go.Figure()
 
-    sns.lineplot(x='Day', y='Daily_Use', hue='Resource', data=data, legend='full')
+    resources = data['Resource'].unique()
+    for resource in resources:
+        resource_data = data[data['Resource'] == resource]
 
-    mean_data = data.groupby('Day')['Daily_Use'].mean().reset_index()
-    sns.lineplot(x='Day', y='Daily_Use', data=mean_data, color='black', label='Mean Daily Use', linewidth=2)
+        mean_line = resource_data.groupby('Day')['Daily_Use'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=mean_line['Day'], y=mean_line['Daily_Use'], 
+                                 mode='lines', name=f'{resource} Mean', line=dict(width=3)))
 
-    plt.xlabel('Day')
-    plt.ylabel('Average Daily Use')
-    plt.title('Resource Utilization Over Time')
-    plt.legend( loc='upper right')
-    st.pyplot(plt)
+    fig.update_layout(title='Resource Utilization Over Time', xaxis_title='Day', yaxis_title='Average Daily Use')
+    st.plotly_chart(fig)   
+
+
 
 
 def plot_queue_length(data):
-    plt.figure(figsize=(10, 6), dpi=300)
-    sns.set(style="whitegrid")
-
     queue_len_NICU = data[data['Resource'] == 'NICU']['Queue_Length'].mean()
     queue_len_HDCU = data[data['Resource'] == 'HDCU']['Queue_Length'].mean()
     queue_len_SCBU = data[data['Resource'] == 'SCBU']['Queue_Length'].mean()
 
     # Display the metrics
     with st.container(border=True):
-        st.info("Average Queue Lenght by Resource")
+        st.info("Average Queue Length by Resource")
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric(label="Average NICU", value=f"{queue_len_NICU:.2f}")
@@ -132,25 +135,20 @@ def plot_queue_length(data):
         with col3:
             st.metric(label="Average SCBU", value=f"{queue_len_SCBU:.2f}")
 
-        col1, col2, col3 = st.columns(3)
+    fig = go.Figure()
 
-    sns.lineplot(x='Day', y='Queue_Length', hue='Resource', data=data, legend='full')
+    resources = data['Resource'].unique()
+    for resource in resources:
+        resource_data = data[data['Resource'] == resource]
 
-    # Calculate and plot the mean line grouped by Day
-    mean_data = data.groupby('Day')['Queue_Length'].mean().reset_index()
-    sns.lineplot(x='Day', y='Queue_Length', data=mean_data, color='black', label='Mean Queue Length', linewidth=2)
+        mean_line = resource_data.groupby('Day')['Queue_Length'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=mean_line['Day'], y=mean_line['Queue_Length'], 
+                                 mode='lines', name=f'{resource} Mean', line=dict(width=3)))
 
-    plt.xlabel('Day')
-    plt.ylabel('Queue Length')
-    plt.title('Queue Length Over Time')
-    plt.legend( loc='upper right')
-    st.pyplot(plt)
+    fig.update_layout(title='Queue Length Over Time', xaxis_title='Day', yaxis_title='Average Queue Length')
+    st.plotly_chart(fig)
         
 def plot_available_capacity(data):
-
-    available_capacity_data = data[['Day', 'Resource', 'Available_Capacity']]
-    plt.figure(figsize=(10, 6))
-
     Available_Capacity_NICU = data[data['Resource'] == 'NICU']['Available_Capacity'].mean()
     Available_Capacity_HDCU = data[data['Resource'] == 'HDCU']['Available_Capacity'].mean()
     Available_Capacity_SCBU = data[data['Resource'] == 'SCBU']['Available_Capacity'].mean()
@@ -166,37 +164,28 @@ def plot_available_capacity(data):
         with col3:
             st.metric(label="Average SCBU", value=f"{Available_Capacity_SCBU:.2f}")
 
-        col1, col2, col3 = st.columns(3)
+    fig = go.Figure()
 
-    # Plot each unit with alpha=0.2
-    for unit in available_capacity_data['Resource'].unique():
-        subset = available_capacity_data[available_capacity_data['Resource'] == unit]
-        plt.plot(subset['Day'], subset['Available_Capacity'], label=unit, alpha=0.2)
+    resources = data['Resource'].unique()
+    for resource in resources:
+        resource_data = data[data['Resource'] == resource]
 
-    # Calculate and plot mean lines with bold lines
-    mean_capacity_data = available_capacity_data.groupby(['Day', 'Resource'])['Available_Capacity'].mean().reset_index()
-    for unit in mean_capacity_data['Resource'].unique():
-        mean_subset = mean_capacity_data[mean_capacity_data['Resource'] == unit]
-        plt.plot(mean_subset['Day'], mean_subset['Available_Capacity'], label=f"{unit} Mean", linewidth=2)
+        mean_line = resource_data.groupby('Day')['Available_Capacity'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=mean_line['Day'], y=mean_line['Available_Capacity'], 
+                                 mode='lines', name=f'{resource} Mean', line=dict(width=3)))
 
-    plt.xlabel('Day')
-    plt.ylabel('Available Capacity')
-    plt.title('Available Capacity for Neonatal Care Units Over Time (with Mean)')
-    plt.legend( loc='upper right') #title='Neonatal Unit',
-    plt.grid(True)
-    st.pyplot(plt)
+    fig.update_layout(title='Available Capacity for Neonatal Care Units Over Time', 
+                      xaxis_title='Day', yaxis_title='Available Capacity')
+    st.plotly_chart(fig)
     
 def plot_admission_discharge_trends_moving_avg(data):
-
+    colors = {'NICU': 'blue', 'HDCU': 'red', 'SCBU': 'green'}
     daily_use = data.groupby(['Day', 'Resource'])['Daily_Use'].sum().unstack()
     admissions = daily_use.diff().clip(lower=0)
     discharges = -daily_use.diff().clip(upper=0)
 
     admissions_avg = admissions.rolling(window=7).mean().melt(ignore_index=False, var_name='Resource', value_name='Admissions').reset_index()
     discharges_avg = discharges.rolling(window=7).mean().melt(ignore_index=False, var_name='Resource', value_name='Discharges').reset_index()
-
-    # admissions_avg['Category'] = admissions_avg['Resource'] + ' Admissions'
-    # discharges_avg['Category'] = discharges_avg['Resource'] + ' Discharges'
 
     Avg_Admission_NICU = admissions_avg[admissions_avg['Resource'] == 'NICU']['Admissions'].mean()
     Avg_Admission_HDCU = admissions_avg[admissions_avg['Resource'] == 'HDCU']['Admissions'].mean()
@@ -205,7 +194,8 @@ def plot_admission_discharge_trends_moving_avg(data):
     Avg_Discharge_NICU = discharges_avg[discharges_avg['Resource'] == 'NICU']['Discharges'].mean()
     Avg_Discharge_HDCU = discharges_avg[discharges_avg['Resource'] == 'HDCU']['Discharges'].mean()
     Avg_Discharge_SCBU = discharges_avg[discharges_avg['Resource'] == 'SCBU']['Discharges'].mean()
-   
+
+    fig = go.Figure()
 
     with st.container(border=True):
         st.info("Average Admissions and Discharges by Resource")
@@ -226,41 +216,25 @@ def plot_admission_discharge_trends_moving_avg(data):
         with col6:
             st.metric(label="SCBU Discharges", value=f"{Avg_Discharge_SCBU:.2f}")
 
+    # Plot for admissions and discharges
+    for resource in admissions_avg['Resource'].unique():
+        admissions_data = admissions_avg[admissions_avg['Resource'] == resource]
+        discharges_data = discharges_avg[discharges_avg['Resource'] == resource]
 
-    # sns.lineplot(data=admissions_avg, x='Day', y='Admissions')
-    # sns.lineplot(data=discharges_avg, x='Day', y='Discharges')
+        # Admissions
+        fig.add_trace(go.Scatter(x=admissions_data['Day'], y=admissions_data['Admissions'], mode='lines+markers', 
+                                 name=f'{resource} Admissions', #line=dict(color=colors[resource], width=2), 
+                                 marker=dict(symbol='circle')))
+        
+        # Discharges
+        fig.add_trace(go.Scatter(x=discharges_data['Day'], y=discharges_data['Discharges'], mode='lines+markers', 
+                                 name=f'{resource} Discharges', #line=dict(color=colors[resource], width=2), 
+                                 marker=dict(symbol='x')))
 
-
-    # plt.xlabel('Day')
-    # plt.ylabel('7-Day Moving Average')
-    # plt.title('7-Day Moving Average of Admissions and Discharges by Resource')
-    # plt.legend(title='Category', loc='upper right', bbox_to_anchor=(1.05, 1))
-
-    # st.pyplot(plt)
-
-    plt.figure(figsize=(10, 6), dpi=300)
-    sns.set(style="whitegrid")
-
-    # Plot for admissions
-    sns.lineplot(data=admissions_avg, x='Day', y='Admissions', hue='Resource', legend=False)
-    # Plotting mean lines for each resource in admissions
-    # for resource in admissions_avg['Resource'].unique():
-    #     mean_admissions = admissions_avg[admissions_avg['Resource'] == resource]['Admissions'].mean()
-    #     plt.axhline(mean_admissions, linestyle='--', label=f"{resource} Avg Admissions")
-
-    # Plot for discharges
-    sns.lineplot(data=discharges_avg, x='Day', y='Discharges', hue='Resource', legend=False)
-    # Plotting mean lines for each resource in discharges
-    # for resource in discharges_avg['Resource'].unique():
-    #     mean_discharges = discharges_avg[discharges_avg['Resource'] == resource]['Discharges'].mean()
-    #     plt.axhline(mean_discharges, linestyle='--', label=f"{resource} Avg Discharges")
-
-    plt.xlabel('Day')
-    plt.ylabel('7-Day Moving Average')
-    plt.title('7-Day Moving Average of Admissions and Discharges by Resource')
-    plt.legend(title='Category', loc='upper right')
-
-    st.pyplot(plt)
+    fig.update_layout(title='7-Day Moving Average of Admissions and Discharges by Resource', 
+                      xaxis_title='Day', yaxis_title='7-Day Moving Average', 
+                      legend_title='Category')
+    st.plotly_chart(fig)
 
 def plot_daywise_resource_utilization(data):
     data['Utilization_Rate'] = data['Daily_Use'] / data['Total_Capacity']
@@ -268,32 +242,33 @@ def plot_daywise_resource_utilization(data):
     avg_utilization_NICU = data[data['Resource'] == 'NICU']['Utilization_Rate'].mean()
     avg_utilization_HDCU = data[data['Resource'] == 'HDCU']['Utilization_Rate'].mean()
     avg_utilization_SCBU = data[data['Resource'] == 'SCBU']['Utilization_Rate'].mean()
-    
-    plt.figure(figsize=(12, 6))
-    sns.set(style="whitegrid") 
 
     with st.container(border=True):
-            st.info("Average Utilization Rate by Resource")
+        st.info("Average Utilization Rate by Resource")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="NICU", value=f"{avg_utilization_NICU:.2f}")
+        with col2:
+            st.metric(label="HDCU", value=f"{avg_utilization_HDCU:.2f}")
+        with col3:
+            st.metric(label="SCBU", value=f"{avg_utilization_SCBU:.2f}")
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric(label="NICU", value=f"{avg_utilization_NICU:.2f}")
-            with col2:
-                st.metric(label="HDCU", value=f"{avg_utilization_HDCU:.2f}")
-            with col3:
-                st.metric(label="SCBU", value=f"{avg_utilization_SCBU:.2f}")
+    fig = go.Figure()
+    colors = {'NICU': 'blue', 'HDCU': 'red', 'SCBU': 'green'}
 
-    data['Utilization_MA'] = data.groupby('Resource')['Utilization_Rate'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+    # Calculate and plot the daily average for each resource
+    resources = data['Resource'].unique()
+    for resource in resources:
+        resource_data = data[data['Resource'] == resource]
+        daily_avg = resource_data.groupby('Day')['Utilization_Rate'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=daily_avg['Day'], y=daily_avg['Utilization_Rate'], mode='lines', name=f'{resource} Average'))
 
-    sns.lineplot(x='Day', y='Utilization_MA', hue='Resource', data=data, marker="o")
-
-    plt.title('Day-wise Resource Utilization (7-day Moving Average)')
-    plt.xlabel('Day')
-    plt.ylabel('Utilization Rate')
-    plt.legend(title='Neonatal Unit', loc='upper left')
-    plt.tight_layout()
-
-    st.pyplot(plt)
+    # Update the layout
+    fig.update_layout(title='Average Daily Resource Utilization Rate',
+                      xaxis_title='Day',
+                      yaxis_title='Utilization Rate',
+                      legend_title='Resource')
+    st.plotly_chart(fig)
 
 st.set_page_config(page_title="Simulation Demo", page_icon="📈")
 
@@ -583,24 +558,38 @@ def main_app():
 
             with st.container(border=True):
                 st.info("*//Experimental//*")
-                # if st.checkbox('Show simulation Statistics'):
                 st.subheader("Summary Statistics of Data")
-                data_desc = data.describe()
+
+                # Filter options for displaying fields
+                all_columns = data.columns.tolist()
+                selected_columns = st.multiselect("Select fields to display", all_columns, default=all_columns)
+
+                # Display only selected fields in the summary statistics
+                data_desc = data[selected_columns].describe()
                 st.dataframe(data_desc)
 
-                ###KPIs
-                average_utilization = data['Utilization_Rate'].mean()
-                max_queue_length = data['Queue_Length'].max()
-                # Display KPIs using Markdown
+                # # Check if plots are initialized
+                # if not st.session_state.plot_initialized:
+                #     # Plotting code (this will run only once or when explicitly updated)
+                #     plot_data()
+                #     st.session_state.plot_initialized = True
 
-                metric1,metric2,=st.columns(2,gap='small')
-                with metric1:
-                    st.info('Average Utilization') #,icon="💰"
-                    st.metric(label="Average Utilization",value=f"{average_utilization:,.4f}")
+                ### KPIs
+                if 'Utilization_Rate' in selected_columns:
+                    average_utilization = data['Utilization_Rate'].mean()
+                    metric1, metric2 = st.columns(2, gap='small')
+                    with metric1:
+                        st.info('Average Utilization')
+                        st.metric(label="Average Utilization", value=f"{average_utilization:,.4f}")
+                
+                if 'Queue_Length' in selected_columns:
+                    max_queue_length = data['Queue_Length'].max()
+                    with metric2:
+                        st.info('Max Queue Length')
+                        st.metric(label="Max Queue Length", value=f"{max_queue_length:,.0f}")
 
-                with metric2:
-                    st.info('Max Queue Length')
-                    st.metric(label="Max Queue Length",value=f"{max_queue_length:,.0f}")
+                
+
 
 
             @st.cache_data
@@ -648,7 +637,7 @@ def display_agreement():
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
-if st.session_state['logged_in']:
+if True: # st.session_state['logged_in']:
     def main():
         st.sidebar.image('./NECS_Cropped_Dots.png', caption=None, width=200, use_column_width=None, clamp=False, channels="RGB", output_format="auto")
         # st.sidebar.divider()
@@ -656,7 +645,7 @@ if st.session_state['logged_in']:
         page = st.sidebar.radio("Select a Page", ["Main App", "Modify Parameters", "Submit Your Feedback"])
         # st.sidebar.divider()
 
-        if page == "Main App":
+        if  page == "Main App":
             main_app()
         elif page == "Modify Parameters":
             modify_parameters_page()
